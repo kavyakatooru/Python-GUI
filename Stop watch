@@ -1,0 +1,113 @@
+# template for "Stopwatch: The Game"
+import simplegui
+# define global variables
+a=0
+b=0
+c=0
+d=0
+x=0
+y=0
+# define helper function format that converts time
+# in tenths of seconds into formatted string A:BC.D
+
+    
+# define event handlers for buttons; "Start", "Stop", "Reset"
+def start():
+    timerd.start()
+    timerc.start()
+    timerb.start()
+    timera.start()
+    
+def stop():
+    timerd.stop()
+    timerc.stop()
+    timerb.stop()
+    timera.stop()
+    global x,y,d
+    x=int(x)
+    y=int(y)
+    d=int(d)
+    y=y+1
+    if d==0:
+        x=x+1
+  
+def reset():
+    global a,b,c,d,x,y
+    a=0
+    b=0
+    c=0
+    d=0
+    x=0
+    y=0
+  
+
+# define event handler for timer with 0.1 sec interval
+
+def timera():
+    global a
+    a=int(a)
+    if a<11:
+        a=a+1
+    
+    
+   
+def timerb():
+    global b
+    b=int(b)
+    if b<6:
+       b=b+1
+    if b>=6:
+        b=0
+   
+def timerc():
+    global c
+    c=int(c)
+    if c<10:
+        c=c+1
+    if c>9:
+        c=0
+    
+   
+def timerd():
+    global d
+    d=int(d)
+    if d<10:
+        d=d+1
+    if d>9:
+        d=0
+    
+   
+
+
+# define draw handler
+def draw_handler(canvas):
+    global a,b,c,d,x,y
+    a=str(a)
+    b=str(b)
+    c=str(c)
+    d=str(d)
+    x=str(x)
+    y=str(y)
+    text1=a+':'+b+c+'.'+d
+    text2=x+'/'+y
+    canvas.draw_text(text1, (100, 100), 50, 'White')
+    canvas.draw_text(text2, (260,25),25,'Red')
+    
+    
+# create frame
+frame= simplegui.create_frame("Stopwatch: The Game", 300, 200)
+
+# register event handlers
+button1=frame.add_button("Start", start)
+button2=frame.add_button("Stop", stop)
+button3=frame.add_button("Reset", reset)
+
+timera=simplegui.create_timer(60000, timera)
+timerb=simplegui.create_timer(10000,timerb)
+timerc=simplegui.create_timer(1000, timerc)
+timerd=simplegui.create_timer(100,timerd)
+
+frame.set_draw_handler(draw_handler)
+
+# start frame
+frame.start()
