@@ -1,0 +1,246 @@
+# import modules
+import random
+import simplegui
+
+
+# simple state example for Memory
+WIDTH = 1024
+HEIGHT = 440
+BUTTON_WIDTH = 200
+
+deck_range = 8
+deck_size = deck_range * 2
+
+width_per_card = WIDTH / (deck_size / 2)
+height_per_card = 200
+font_size = width_per_card // 2 # 24
+font_size_small = font_size // 3 # 24
+
+#####################################################################
+# images and sound
+# Spritesheet made from RICE University public web site for Introduction to Python Course, Instructors page
+card_image = simplegui.load_image("https://dl.dropboxusercontent.com/u/94696074/games/Memory/Spritesheet_Memory.png")
+card_width = 180
+card_height = 180
+
+# Audio clips compiled from "An Introduction to Python" course materials 2015, plus Welcome to RICE University 2015 YouTube video.
+# Some have only one clip, while some have many providing us choices for each new game.
+sound_clips = [
+    [ "new_game", ["snd_Course_introduction.mp3"] ],
+    [ "match_failed", ["snd_No_Nope_nope_nope.mp3"] ],
+    [ "match_success", ["snd_Yes_Ohhh_yehhh.mp3"] ],
+    [ 0, ["0snd_Welcome_to_RICE_University.mp3"] ],
+    [ 1, ["1snd_Joe_Warren_Revenge_is_sweet_That_was_fun.mp3", "1snd_Joe_Warren_You_re_not_supposed_to_shuffle.mp3", "1snd_Team_JW.mp3"] ],
+    [ 2, ["2snd_Scott_Rixner_Have_fun.mp3", "2snd_Scott_Rixner_Welcome_back.mp3", "2snd_Team_SR.mp3"] ],
+    [ 3, ["3snd_John_Greiner_Let_s_look_at_what_can_go_wrong.mp3", "3snd_John_Greiner_That_s_it_for_this_week.mp3", "3snd_Team_JG.mp3"] ],
+    [ 4, ["4snd_Stephen_Wong.mp3", "4snd_Team_SW.mp3"] ],
+    [ 5, ["5snd_Python.mp3"] ],
+    [ 6, ["6snd_Team_RPSLS.mp3"] ],
+    [ 7, ["7snd_Pong_rally.mp3"] ]
+    ]
+
+# create dict{} - key: speech element, value: a list[] of one or more choices of sounds to play.
+URL_PREFIX = 'https://dl.dropboxusercontent.com/u/94696074/games/Memory/audio/'
+
+sound_info = {}
+for element in sound_clips:
+    sound_objects = []
+    for filename in element[1]:
+        # create sound object by loading each file & add to list[]
+        sound_object = simplegui.load_sound(URL_PREFIX + filename)
+        sound_objects.append(sound_object)
+    # add to dict (element[0]) -> [ sound_object, ... ]
+    sound_info[element[0]] = sound_objects
+
+# create list of which sound clip to play for each card.
+sound_info_cards = []
+
+#####################################################################
+# initialise globals
+
+# exposed states
+UNEXPOSED = False
+EXPOSED = not UNEXPOSED
+
+# count number of card_turns in a given turn (game)
+card_turns = 0
+# last two cards exposed
+card_clicked1 = None
+card_clicked2 = None
+
+# Memory deck
+deck = list()
+exposed = [UNEXPOSED] * deck_size
+
+#####################################################################
+# event handlers and timers
+
+# define event handlers
+def new_game():
+    global state
+    global exposed
+    global card_turns, card_clicked1, card_clicked2
+    global deck
+    state = 0
+    card_turns = 0
+    card_clicked1 = None
+    card_clicked2 = None
+    
+    # new game tune
+    sound_info["new_game"][0].play()
+
+    # 3. Shuffle the deck using random.shuffle().
+    random.shuffle(deck)
+
+    # initialise list to track which cards are exposed, default to unexposed.
+    for i in range(len(deck)):
+        exposed[i] = UNEXPOSED
+
+    # shuffle audio per card for each new game, as some cards have 
+    # 1, 2 or even 3 choices of audio files.
+    audio_init()
+    
+# 5. Determine which card have clicked on with your mouse.
+# Add an event handler for mouse clicks that takes the position of the mouse click and 
+# prints the index of the card that you have clicked on to the console.
+def mouse_handler(position):
+    global state, card_clicked1, card_clicked2, card_turns
+    global last_turn_result
+    
+    # determine which card clicked from horizontal and 
+    # vertical components of mouse position.
+    # cards laid out in grid: 8 horizontally in 2 rows.
+    card_clicked = position[0] // width_per_card
+
+    # if mouse vertical between 1*card_height and 2*card_height, then in row 2.
+    if height_per_card <= position[1] <= 2*height_per_card:
+        card_clicked += 8  # i.e. cards 8-15
+    
+    # 6. Flip cards based on the location of the mouse click.
+    # If the player clicked on the ith card, you can change the value of exposed[i]
+    # from False to True. If the card is already exposed, you should ignore the mouseclick.
+    if exposed[card_clicked] == EXPOSED:
+        return
+    else:
+        exposed[card_clicked] = EXPOSED
+        # play the sound for the card underneath the card tile clicked.
+        sound_info_cards[deck[card_clicked]].play()
+
+
+    # game logic for selecting two cards and determining if they match.
+
+    # State 0 corresponds to the start of the game.
+    # In state 0, if you click on a card, that card is exposed, and you switch to state 1.
+    if state == 0:
+        state = 1
+        card_clicked1 = card_clicked
+
+    # State 1 corresponds to a single exposed unpaired card. 
+    # In state 1, if you click on an unexposed card, that card is exposed and you switch to 
+    # state 2. State 2 corresponds to the end of a turn. 
+    elif state == 1:
+        state = 2
+        card_clicked2 = card_clicked
+        last_turn_result = end_of_turn(card_clicked1, card_clicked2)
+
+    # In state 2, if you click on an unexposed card, that card is exposed and you switch to
+    # state 1.
+    elif state == 2:
+        state = 1
+        if last_turn_result is False: # Last game lost
+            exposed[card_clicked1] = UNEXPOSED
+            exposed[card_clicked2] = UNEXPOSED
+        card_clicked1 = card_clicked
+
+
+# 2. Draw handler that iterates through the Memory deck and 
+# uses draw_text to draw the number associated with each card on the canvas. 
+# The result should be a horizontal sequence of evenly-spaced numbers drawn 
+# on the canvas (in a single row or a grid).
+
+# 4. Next, modify the draw handler to either draw a blank green rectangle or 
+# the card's value. To implement this behavior, we suggest that you create 
+# a second list called exposed. 
+# In the exposed list, the ith entry should be True if the ith card is face up and
+# its value is visible or False if the ith card is face down and it's value is hidden.
+def draw(canvas):
+    # Draw card frames and their states. Draw in 2 rows of 8 cards = 16.
+    for i in range(deck_size):
+        card_nr = deck[i]
+        row = i // (deck_size // 2)  # 0..1
+        x_start = width_per_card * (i % 8)  # 0..7
+        y_start = height_per_card * (i // 8) # row 0 or row 1.
+
+        # draw card either face up / down
+        is_exposed = exposed[i]
+        if is_exposed:
+            # draw grid filled with card number and image.
+            canvas.draw_polygon([(x_start, y_start), (x_start+width_per_card, y_start), \
+                                 (x_start+width_per_card, y_start+height_per_card),
+                                 (x_start, y_start+height_per_card)], 3, "Lime", "Red")
+
+            canvas.draw_image(card_image, [card_width*(card_nr + 0.5), card_height*0.5], [card_width, card_height], \
+                                          [x_start+(width_per_card//2), y_start+20+card_height//2], [width_per_card-2, card_height])
+
+            canvas.draw_text(str(deck[i]), [x_start+(width_per_card//2), y_start+font_size_small-3], font_size_small, "Yellow", "sans-serif")
+        else:
+            # draw grid filled with a blank green rectangle.
+            canvas.draw_polygon([(x_start, y_start), (x_start+width_per_card, y_start), \
+                                 (x_start+width_per_card, y_start+height_per_card),
+                                 (x_start, y_start+height_per_card)], 3, "Lime", "Green")
+            
+        label1.set_text("Number of turns: " + str(card_turns))
+
+    # Title of game
+    canvas.draw_text("R.I.C.E. C.S. Team - Memory (aka Pairs or Concentration)", [10, y_start+height_per_card+30], 30, "Yellow", "sans-serif")
+
+#####################################################################
+# helper functions
+
+def audio_init():
+    global sound_info_cards
+    """ for each new game randomise choice of sounds for all 0-7 image tiles """
+    sound_info_cards = []
+    for card in range(deck_range):
+        sound_info_cards.append(random.choice(sound_info[card]))
+
+def end_of_turn(card1, card2):
+    global status
+    global card_turns
+    
+    # check for matched pair
+    if deck[card1] == deck[card2]:
+        # Match found. Well done!
+        status = 0
+        match_found = True
+        sound_info["match_success"][0].play()
+    else:
+        # No match found. Try again
+        status = 1
+        match_found = False
+        sound_info["match_failed"][0].play()
+
+    card_turns += 1
+
+    return match_found
+
+#####################################################################
+# initialise frames, register event handlers and begin game.
+        
+# 1. Model the deck of cards used in Memory as a list consisting of 16 numbers with each number lying in the range [0,8)
+list1 = range(0, deck_size // 2)
+list2 = range(0, deck_size // 2)
+deck = list1 + list2
+
+# create frame and add a button and labels
+frame = simplegui.create_frame("Memory states", WIDTH, HEIGHT)
+frame.add_button("Reset", new_game, BUTTON_WIDTH)
+label1 = frame.add_label("Turns:", BUTTON_WIDTH)
+frame.set_mouseclick_handler(mouse_handler)
+
+# register event handlers
+frame.set_draw_handler(draw)
+
+# get things rolling
+new_game()
+frame.start()
